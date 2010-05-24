@@ -2,7 +2,7 @@
 // Meta-analysis of outcomes at multiple follow up times: a multivariate approach
 // 
 
-// Here we compare univariate iand multivariate fixed effects meta-analysis
+// Here we compare univariate and multivariate fixed effects meta-analysis
 // You will need the metan routine in Stata
 
 use data, clear

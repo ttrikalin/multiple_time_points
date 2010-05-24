@@ -7,6 +7,9 @@
 // NA is the denominator for arm A
 
 // the 17th study has no data for time points 1 and 3
+// there is no need to impute for the main analyses 
+// I am using ML programmes that use different likelihood contributions 
+// for study 17 
 
 clear 
 input n11 n12 n13 n14 N1 n21 n22 n23 n24 N2 

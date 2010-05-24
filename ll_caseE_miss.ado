@@ -1,3 +1,4 @@
+*! version 0.4 24mar2010
 *! version 0.3 2feb2010
 *! ttrikalin@mac.com  
 // case E: unstructured matrix  
@@ -5,7 +6,8 @@
 // note the wonderful reparameterization of the unstructured matrix:
 // We optimize the cholesky decomposition of Sigma -- ie the "sqrt";
 // By reconstructing Sigma that way, we guarantee that it is invertible.
-// Nice. 
+// Nice. Very very nice I dare say. I wasted too many hours and Ian had the 
+// solution already...  next time see what others have done!!!
 
 prog def ll_caseE_miss
 
@@ -18,32 +20,32 @@ args todo b  lnf
 
 local y $ymat
 local S $Smat
-local n $n
-local p $p
+local K $K
+local m $m
 
 tempname BETA cholmat T  W dev minus2ll Wsum ll
 tempname X P Wsum_miss
 
-mat `BETA' = J(1, `p', 0)
-forval i =1/`p' {
+mat `BETA' = J(1, `m', 0)
+forval i =1/`m' {
 	mat `BETA'[1, `i']=el(`b',1,`i')
 }
-local k `p'
+local j0 `m'
 
-mat `cholmat' = J(`p', `p', 0)
-forval i=1/`p' {
+mat `cholmat' = J(`m', `m', 0)
+forval i=1/`m' {
 	forval j=1/`i' {
-		local ++k
-		mat `cholmat'[`i', `j']=el(`b', 1, `k')
+		local ++j0
+		mat `cholmat'[`i', `j']=el(`b', 1, `j0')
 	}
 }
 
 mat `T' = `cholmat' * `cholmat''
 
-mat `Wsum' = J(`p',`p',0)
+mat `Wsum' = J(`m',`m',0)
 scalar `ll'= 0
 
-forvalues i = 1/`n' {
+forvalues i = 1/`K' {
 
 	local hasmissing = (diag0cnt(`S'`i')>0)
 	if (`hasmissing' == 0) {
@@ -53,7 +55,7 @@ forvalues i = 1/`n' {
 			exit -1
   		}
 		mat `dev' = `y'`i'-`BETA'
-		mat `minus2ll' = `p'*log(2*_pi) - log(det(`W')) + `dev' * `W' * `dev''
+		mat `minus2ll' = `m'*log(2*_pi) - log(det(`W')) + `dev' * `W' * `dev''
 		mat `Wsum' = `Wsum' + `W'
 	}
 	if (`hasmissing'==1) {
@@ -71,7 +73,7 @@ forvalues i = 1/`n' {
 		mat `minus2ll' = `=colsof(`S'`i')'*log(2*_pi) - log(det(`W')) + `dev' * `W' * `dev''
 
 		// pad W with 0's for the missing rows/columns 
-		mat  `Wsum_miss' = J(`p',`p', 0)
+		mat  `Wsum_miss' = J(`m',`m', 0)
 		forval j=1/`nonmissing' {
 			forval k=1/`nonmissing' {
 				mat `Wsum_miss'[`j', `k'] = `W'[`j', `k']
@@ -87,7 +89,7 @@ forvalues i = 1/`n' {
 }
 if ($restricted == 1 ) {
 	// of there is a study with a missing outcome, the constant part is not correct!
-	scalar `ll' = `ll' - log(det(`Wsum'))/2 + `p'*log(2*_pi)/2
+	scalar `ll' = `ll' - log(det(`Wsum'))/2 + `m'*log(2*_pi)/2
 }
 
 scalar `lnf' = `ll'

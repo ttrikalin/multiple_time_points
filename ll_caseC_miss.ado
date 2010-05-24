@@ -1,3 +1,4 @@
+*! version 0.4 24mar2010
 *! version 0.3 2feb2010
 *! ttrikalin@mac.com  
 // case C: common sigma - autoregressive correlation 
@@ -14,29 +15,32 @@ args todo b  lnf
 
 local y $ymat
 local S $Smat
-local n $n
-local p $p
+local K $K
+local m $m
 
-local epsilon 1e-5  // for back transforming correlations
+local epsilon 1e-5  // see back-tranforming of correlations 
 
 tempname BETA SD rho1 rho C T W dev minus2ll Wsum ll
 tempname X P Wsum_miss
 
 // get input arguments  
-mat `BETA' = J(1, `p', 0)
-forval i =1/`p' {
+mat `BETA' = J(1, `m', 0)
+forval i =1/`m' {
 	mat `BETA'[1, `i']=el(`b',1,`i')
 }
-local k `p'
+local j0 `m'
 
-local ++k
-scalar `SD' = exp(el(`b', 1, `k'))
+local ++j0
+scalar `SD' = exp(el(`b', 1, `j0'))
 
-local ++k
-scalar `rho1' = el(`b', 1, `k')
+// Below I am back transforming to obtain the autocorrelation 
+// (bounded between 0 and 1)
+local ++j0
+scalar `rho1' = el(`b', 1, `j0')
+scalar `rho' = 0.5*tanh(`rho1') + 0.5
 
-// back transforming to obtain the bounded correlation (between 0 and 1)
-scalar `rho' = 0.5*tanh(`rho1') + 0.5  
+// because of risk for numerical overflow or underflow I am catching the 
+// correlation value within epsilon of 0 and 1 
 if (`rho' >=. ) {
         if (sign(`rho1')==-1) {
                 scalar `rho' = `epsilon'
@@ -49,19 +53,19 @@ if (`rho' >=. ) {
 
 
 
-mat `C' = J(`p', `p', 1)
-forval i=1/`p' {
-	forval j=1/`p' {
+mat `C' = J(`m', `m', 1)
+forval i=1/`m' {
+	forval j=1/`m' {
 		mat `C'[`i', `j']= `rho'^abs(`i'-`j')
 	}
 }
 
 mat `T' = `SD' * `C'
 
-mat `Wsum' = J(`p',`p',0)
+mat `Wsum' = J(`m',`m',0)
 scalar `ll'= 0
 
-forvalues i = 1/`n' {
+forvalues i = 1/`K' {
 
 	local hasmissing = (diag0cnt(`S'`i')>0)
 	if (`hasmissing' == 0) {
@@ -71,7 +75,7 @@ forvalues i = 1/`n' {
 			exit -1
   		}
 		mat `dev' = `y'`i'-`BETA'
-		mat `minus2ll' = `p'*log(2*_pi) - log(det(`W')) + `dev' * `W' * `dev''
+		mat `minus2ll' = `m'*log(2*_pi) - log(det(`W')) + `dev' * `W' * `dev''
 		mat `Wsum' = `Wsum' + `W'
 	}
 	if (`hasmissing'==1) {
@@ -89,10 +93,10 @@ forvalues i = 1/`n' {
 		mat `minus2ll' = `=colsof(`S'`i')'*log(2*_pi) - log(det(`W')) + `dev' * `W' * `dev''
 
 		// pad W with 0's for the missing rows/columns 
-		mat  `Wsum_miss' = J(`p',`p', 0)
-		forval j=1/`nonmissing' {
-			forval k=1/`nonmissing' {
-				mat `Wsum_miss'[`j', `k'] = `W'[`j', `k']
+		mat  `Wsum_miss' = J(`m',`m', 0)
+		forval j1=1/`nonmissing' {
+			forval j2=1/`nonmissing' {
+				mat `Wsum_miss'[`j1', `j2'] = `W'[`j1', `j2']
 			}
 		}
 
@@ -105,7 +109,7 @@ forvalues i = 1/`n' {
 }
 if ($restricted == 1 ) {
 	// of there is a study with a missing outcome, the constant part is not correct!
-	scalar `ll' = `ll' - log(det(`Wsum'))/2 + `p'*log(2*_pi)/2
+	scalar `ll' = `ll' - log(det(`Wsum'))/2 + `m'*log(2*_pi)/2
 }
 
 

@@ -2,6 +2,9 @@
 // Meta-analysis of outcomes at multiple follow up times: a multivariate approach
 // 
 
+// this do file has to be run in the same session as the next, as it sets up 
+// matrices and global macros for later use. 	
+
 // Perform fixed effects analyses and all REML random effects analyses 
 // There are 5 variants of random effects we are fitting here with REML. They differ 
 // in the way the T matrix is structured (covariance matrix of the random effect)
@@ -14,41 +17,42 @@
 use data, clear
 set seed 12345
 
-// number of outcomes (notation different in the paper!)
-local p 4
+// number of outcomes 
+local m 4
 
-// number of observations (notation different in the paper!)
+// number of observations - studies  
 qui count 
-local n = r(N)
+local K = r(N)
 
-global restricted = 1 // do REML rather than ML 
+
+global restricted = 1 // do REML rather than ML - option in the ML programmes
 
 
 // These globals and matrices are needed to pass information to the likelihood 
 // optimization programs. 
 
-global n `n'
+global K `K'
 global ymat  "ymat"
 global Smat  "Smat"
-global p `p'
+global m `m'
 
-forval i=1/`n' {
-	mat ymat`i' = J(1, `p', 0)	
-	forval j =1/`p' {
-		qui summ b`j' in `i' , meanonly		 
-		mat ymat`i'[1,`j'] = r(mean) 
+forval i=1/`K' {
+	mat ymat`i' = J(1, `m', 0)	
+	forval j1 =1/`m' {
+		qui summ b`j1' in `i' , meanonly		 
+		mat ymat`i'[1,`j1'] = r(mean) 
 	}
 	if (matmissing(ymat`i')) {
 		noi di in yellow "Study `i' has missing values:"
 		noi mat li ymat`i'
 	}
 
-	mat Smat`i' = J(`p', `p' , 0)
-	forval k =1/`p' {
-		forval m =`k'/`p' {
-			qui summ  V`k'`m' in `i' , meanonly 
-			mat Smat`i'[`k', `m'] = r(mean)
-			mat Smat`i'[`m', `k'] = r(mean)
+	mat Smat`i' = J(`m', `m' , 0)
+	forval j2 =1/`m' {
+		forval j3 =`j2'/`m' {
+			qui summ  V`j2'`j3' in `i' , meanonly 
+			mat Smat`i'[`j2', `j3'] = r(mean)
+			mat Smat`i'[`j3', `j2'] = r(mean)
 		}
 	}	
 }
@@ -61,9 +65,9 @@ forval i=1/`n' {
 // This will work fine for the fixed effects GLS -- see below. 
 // The REML programs however will have to do some footwork to accommodate the 17th study
 
-forval i=1/`p' {
+forval i=1/`m' {
 	if (el(ymat17,1,`i')>=.)  mat ymat17[1,`i']=0
-	forval j=1/`p' {
+	forval j=1/`m' {
 		if (el(Smat17,`i',`j')>=.)  mat Smat17[`i',`j']=0
 	}
 }
@@ -76,7 +80,7 @@ forval i=1/`p' {
 // correctmemat is a short program that does this correction quickly.
 
 // First do the 16 studies with complete data
-forval i=1/`=`n'-1' {
+forval i=1/`=`K'-1' {
 	correctmemat, matname(Smat`i') epsilon(0.01)
 	if (r(corrected)) mat Smat`i' = r(M)
 }
@@ -103,8 +107,8 @@ mat drop A
 // Because i have no covariates, there is no design matrix here (it's I(4), omitted)
 
 if (0==0) {  
-	mat Wsum = J(`p', `p', 0)
-        mat Wysum = J(1, `p', 0)
+	mat Wsum = J(`m', `m', 0)
+        mat Wysum = J(1, `m', 0)
 
 	// The 16 studies with all 4 time points are OK
 	// turns out that for the fixed effects model,  
@@ -115,32 +119,32 @@ if (0==0) {
 	// Gleser and Olkin referenced in the paper.
 	// this strategy will not work OK for the REML calculations!
 
-        forval k=1/`n' {
-                mat W`k' = syminv(Smat`k')
-                mat Wysum = Wysum + ymat`k' * W`k'
-                mat Wsum = Wsum + W`k'
+        forval j=1/`K' {
+                mat W`j' = syminv(Smat`j')
+                mat Wysum = Wysum + ymat`j' * W`j'
+                mat Wsum = Wsum + W`j'
         }
 
         mat covbetaFixed = syminv(Wsum)
         mat betaFixed = Wysum * covbetaFixed
 	
 	// by definition TauFixed =0; I will use this when gathering results
-	mat TauFixed = J(`p', `p', 0) 
+	mat TauFixed = J(`m', `m', 0) 
 }
 
 // This is the fixed effects model with a different coding (REML)
 // The results are identical with those from the GLS approach above
+// Just to show that there are several ways to code it.  
 
 if (0==0) {
         // Fixed effects model with REML 
         program drop _all
         global be_verbose = 1  // force ll program to identify itself - avoid blunders 
 
-        ml model d0 ll_fixed_miss (mu: b1 b2 b3 b4 , nocons), obs(`n')  collinear
+        ml model d0 ll_fixed_miss (mu: b1 b2 b3 b4 , nocons), obs(`K')  collinear
 
         mat b0 = [betaFixed]
         ml init b0 , copy
-        //ml check
 
         ml max , difficult iterate(30) ltolerance(1e-7)
         est store Fixed
@@ -153,13 +157,11 @@ if (1==1) {
 	program drop _all 
 	global be_verbose = 1  // force ll program to identify itself - avoid blunders 
 
-	ml model d0 ll_caseA_miss (mu: b1 b2 b3 b4 , nocons) (S:) (rho:), obs(`n')  collinear 
+	ml model d0 ll_caseA_miss (mu: b1 b2 b3 b4 , nocons) (S:) (rho:), obs(`K')  collinear 
 	
 	ml search S: -10 10 rho: 0 1 
-
 	mat b0 = [betaFixed, 1, .5] 
 	ml init b0 , copy 
-	//ml check
 
 	ml max , difficult iterate(30) ltolerance(1e-7)
 	est store A
@@ -174,13 +176,11 @@ if (2==2) {
 	global be_verbose = 1  // force ll program to identify itself - avoid blunders 
 
 	ml model d0 ll_caseB_miss (mu: b1 b2 b3 b4 , nocons) (S1:) (S2:) (S3:) (S4:) (rho:), ///
-		obs(`n')  collinear 
+		obs(`K')  collinear 
 
 	ml search S1: -10 10 S2: -10 10 S3: -10 10 S4: -10 10 rho: 0 1 
-	
 	mat b0 = [betaFixed, 1, 1,1,1,0] 
 	ml init b0 , copy skip
-	//ml check
 
 	ml max , difficult iterate(30) ltolerance(1e-6)
 	est store B
@@ -194,13 +194,11 @@ if (3==3) {
 	program drop _all 
 	global be_verbose = 1  // force ll program to identify itself - avoid blunders 
 
-	ml model d0 ll_caseC_miss (mu: b1 b2 b3 b4 , nocons) (S:) (rho:) , obs(`n')  collinear 
+	ml model d0 ll_caseC_miss (mu: b1 b2 b3 b4 , nocons) (S:) (rho:) , obs(`K')  collinear 
 	
 	ml search S: -10 10  rho: 0 1
-
 	mat b0 = [betaFixed, 1, 0] 
 	ml init b0 , copy skip
-	//ml check
 
 	ml max , difficult iterate(30) ltolerance(1e-7)
 	est store C
@@ -215,13 +213,11 @@ if (4==4) {
 	global be_verbose = 1  // force ll program to identify itself - avoid blunders 
 
 	ml model d0 ll_caseD_miss (mu: b1 b2 b3 b4 , nocons) (S1:) (S2:) (S3:) (S4:) (rho:), ///
-		obs(`n')  collinear 
+		obs(`K')  collinear 
 
 	ml search S1: -10 10 S2: -10 10 S3: -10 10 S4: -10 10 rho: 0 1 
-	
 	mat b0 = [betaFixed, 1, 1,1,1,0] 
 	ml init b0 , copy skip
-	//ml check
 
 	ml max , difficult iterate(30) ltolerance(1e-7)
 	est store D
@@ -239,7 +235,7 @@ if (5==5) {
 		(S11:) (S12:) (S13:) (S14:) ///
 		       (S22:) (S23:) (S24:) ///
 		       	      (S33:) (S34:) ///
-			             (S44:) , obs(`n')  collinear 
+			             (S44:) , obs(`K')  collinear 
 
 	ml search S11: -10 10 S12: -10 10 S13: -10 10 S14: -10 10 ///
 		  	      S22: -10 10 S23: -10 10 S24: -10 10 ///
@@ -249,7 +245,6 @@ if (5==5) {
 	
 	mat b0 = [betaFixed, 1,1,1,1,1,1,1,1,1,1] 
 	ml init b0 , copy skip
-	//ml check
 
 	ml max , difficult iterate(30) ltolerance(1e-7)
 	est store E
@@ -260,36 +255,38 @@ if (5==5) {
 
 
 // Use the betaX, covbetaX and TauX matrices from the multivariate models
-// and reports the results. 
+// and report the results. 
 
 tempfile Results2
 tempname multi
 postfile  `multi' sorter logor se Q df str20 ( timepoint fix_ran uni_multi ) using `Results2', replace
 
-local k = 0
+// an iterator
+local j0 = 0
+// iterate over models
 foreach X in Fixed A B C D E {
 	
 	// calculate Q per model
 	mat qmat = J(1, 1, 0)
-	forval j=1/`n' { 
-		mat qmat = qmat + (ymat`j'-beta`X')*syminv(Smat`j' + Tau`X') * ///
-			(ymat`j' - beta`X')'
+	forval j1=1/`K' { 
+		mat qmat = qmat + (ymat`j1'-beta`X')*syminv(Smat`j1' + Tau`X') * ///
+			(ymat`j1' - beta`X')'
 	}
 
-	forval i =1/`p' {
-		local k = `k' +1
+	forval j2 =1/`m' {
+		local j0 = `j0' +1
 
 		// the contrast matrix 
-		mat a = J(1, `p', 0)
-		mat a[1, `i'] = 1
+		mat a = J(1, `m', 0)
+		mat a[1, `j2'] = 1
 
 		// the effect size and its variance
 		mat ES  = a*beta`X''
 		mat VAR  = a*(covbeta`X')*a'
 
-		post `multi' (`k') (`=el(ES, 1, 1)') ///
+		post `multi' (`j0') (`=el(ES, 1, 1)') ///
 		(`=sqrt(el(VAR,1,1))') (`=el(qmat,1,1)') ///
-			(`=`p'*(`n'-1)') ("`=`i'*6' months") ("`X'") ("multivariate")
+			(`=`m'*(`K'-1)') ("`=`j2'*6' months") ("`X'") ("multivariate")
 		
 	}
 }

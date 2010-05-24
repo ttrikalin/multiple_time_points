@@ -1,3 +1,4 @@
+*! version 0.4 24mar2010
 *! version 0.3 2feb2010
 *! ttrikalin@mac.com  
 // Fixed effects analysis 
@@ -14,8 +15,8 @@ args todo b  lnf
 
 local y $ymat
 local S $Smat
-local n $n
-local p $p
+local K $K
+local m $m
 
 local epsilon = 1e-6
 
@@ -23,17 +24,16 @@ tempname BETA W dev minus2ll Wsum ll
 tempname X P Wsum_miss
 
 // get input arguments  
-mat `BETA' = J(1, `p', 0)
-forval i =1/`p' {
+mat `BETA' = J(1, `m', 0)
+forval i =1/`m' {
 	mat `BETA'[1, `i']=el(`b',1,`i')
 }
-local k `p'
 
-mat `Wsum' = J(`p',`p',0)
+mat `Wsum' = J(`m',`m',0)
 scalar `ll'= 0
 
 
-forvalues i = 1/`n' {
+forvalues i = 1/`K' {
 
 	local hasmissing = (diag0cnt(`S'`i')>0)
 	if (`hasmissing' == 0) {
@@ -43,7 +43,7 @@ forvalues i = 1/`n' {
 			exit -1
   		}
 		mat `dev' = `y'`i'-`BETA'
-		mat `minus2ll' = `p'*log(2*_pi) - log(det(`W')) + `dev' * `W' * `dev''
+		mat `minus2ll' = `m'*log(2*_pi) - log(det(`W')) + `dev' * `W' * `dev''
 		mat `Wsum' = `Wsum' + `W'
 	}
 	if (`hasmissing'==1) {
@@ -61,10 +61,10 @@ forvalues i = 1/`n' {
 		mat `minus2ll' = `=colsof(`S'`i')'*log(2*_pi) - log(det(`W')) + `dev' * `W' * `dev''
 
 		// pad W with 0's for the missing rows/columns 
-		mat  `Wsum_miss' = J(`p',`p', 0)
-		forval j=1/`nonmissing' {
-			forval k=1/`nonmissing' {
-				mat `Wsum_miss'[`j', `k'] = `W'[`j', `k']
+		mat  `Wsum_miss' = J(`m',`m', 0)
+		forval j1=1/`nonmissing' {
+			forval j2=1/`nonmissing' {
+				mat `Wsum_miss'[`j1', `j2'] = `W'[`j1', `j2']
 			}
 		}
 
@@ -77,12 +77,12 @@ forvalues i = 1/`n' {
 }
 if ($restricted == 1 ) {
 	// of there is a study with a missing outcome, the constant part is not correct!
-	scalar `ll' = `ll' - log(det(`Wsum'))/2 + `p'*log(2*_pi)/2
+	scalar `ll' = `ll' - log(det(`Wsum'))/2 + `m'*log(2*_pi)/2
 }
 scalar `lnf' = `ll'
 
 mat BETA = `BETA'
-mat T = J(`p', `p', 0)
+mat T = J(`m', `m', 0)
 mat COVBETA = invsym(`Wsum')
 
 end

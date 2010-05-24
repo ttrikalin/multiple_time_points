@@ -1,3 +1,4 @@
+*! version 0.4 24mar2010
 *! version 0.3 2feb2010
 *! ttrikalin@mac.com  
 // case D: different sigmas - autoregressive correlation 
@@ -14,32 +15,35 @@ args todo b  lnf
 
 local y $ymat
 local S $Smat
-local n $n
-local p $p
+local K $K
+local m $m
 
-local epsilon = 1e-5
+local epsilon = 1e-5   // see below backtransformation of correlations 
 
 tempname BETA SD rho1 rho C T W dev minus2ll Wsum ll
 tempname X P Wsum_miss
 
 // get input arguments  
-mat `BETA' = J(1, `p', 0)
-forval i =1/`p' {
+mat `BETA' = J(1, `m', 0)
+forval i =1/`m' {
 	mat `BETA'[1, `i']=el(`b',1,`i')
 }
-local k `p'
+local j0 `m'
 
-mat `SD' = J(1, `p', 0)
-forval i=1/`k' {
-	local ++k
-	mat `SD'[1, `i'] = exp(el(`b', 1, `k'))
+mat `SD' = J(1, `m', 0)
+forval i=1/`m' {
+	local ++j0
+	mat `SD'[1, `i'] = exp(el(`b', 1, `j0'))
 }
 
-local ++k
-scalar `rho1' = el(`b', 1, `k')
+local ++j0
+scalar `rho1' = el(`b', 1, `j0')
 
 // back transforming to obtain the bounded correlation (between 0 and 1)
 scalar `rho' = 0.5*tanh(`rho1') + 0.5
+// because of risk of numerical over or underflow inthe above line
+// I am catching the transformed correlation within a small epsilon from 0 and 1
+// see paper. 
 if (`rho' >=. ) {
         if (sign(`rho1')==-1) {
                 scalar `rho' = `epsilon'
@@ -51,8 +55,8 @@ if (`rho' >=. ) {
 
 
 mat `T' = diag(`SD')
-forval i=1/`p' {
-	forval j=1/`p' {
+forval i=1/`m' {
+	forval j=1/`m' {
 		if (`i' != `j') {
 			mat `T'[`i', `j'] = (`rho'^abs(`i'-`j') )*sqrt(`SD'[1,`i'] * `SD'[1,`j'])
 		}
@@ -60,10 +64,10 @@ forval i=1/`p' {
 }
 
 
-mat `Wsum' = J(`p',`p',0)
+mat `Wsum' = J(`m',`m',0)
 scalar `ll'= 0
 
-forvalues i = 1/`n' {
+forvalues i = 1/`K' {
 
 	local hasmissing = (diag0cnt(`S'`i')>0)
 	if (`hasmissing' == 0) {
@@ -73,7 +77,7 @@ forvalues i = 1/`n' {
 			exit -1
   		}
 		mat `dev' = `y'`i'-`BETA'
-		mat `minus2ll' = `p'*log(2*_pi) - log(det(`W')) + `dev' * `W' * `dev''
+		mat `minus2ll' = `m'*log(2*_pi) - log(det(`W')) + `dev' * `W' * `dev''
 		mat `Wsum' = `Wsum' + `W'
 	}
 	if (`hasmissing'==1) {
@@ -91,7 +95,7 @@ forvalues i = 1/`n' {
 		mat `minus2ll' = `=colsof(`S'`i')'*log(2*_pi) - log(det(`W')) + `dev' * `W' * `dev''
 
 		// pad W with 0's for the missing rows/columns 
-		mat  `Wsum_miss' = J(`p',`p', 0)
+		mat  `Wsum_miss' = J(`m',`m', 0)
 		forval j=1/`nonmissing' {
 			forval k=1/`nonmissing' {
 				mat `Wsum_miss'[`j', `k'] = `W'[`j', `k']
@@ -107,7 +111,7 @@ forvalues i = 1/`n' {
 }
 if ($restricted == 1 ) {
 	// of there is a study with a missing outcome, the constant part is not correct!
-	scalar `ll' = `ll' - log(det(`Wsum'))/2 + `p'*log(2*_pi)/2
+	scalar `ll' = `ll' - log(det(`Wsum'))/2 + `m'*log(2*_pi)/2
 }
 
 scalar `lnf' = `ll'
